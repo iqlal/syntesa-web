@@ -272,7 +272,7 @@ export const members: TypeMember[] = [
   {
     name: "Muhromin",
     role: "Software Development Member",
-    prodi: "Teknik Informatika",
+    prodi: "Sistem Informasi",
     batch: "2025",
   },
   {
@@ -296,13 +296,13 @@ export const members: TypeMember[] = [
   {
     name: "Krishna Surya Dewata",
     role: "Cloud Infrastructure Member",
-    prodi: "Teknik Informatika",
+    prodi: "Sistem Informasi",
     batch: "2025",
   },
   {
     name: "Amelia Prasa Agustin",
     role: "Cloud Infrastructure Member",
-    prodi: "Teknik Informatika",
+    prodi: "Sistem Informasi",
     batch: "2025",
   },
   {
@@ -332,7 +332,7 @@ export const members: TypeMember[] = [
   {
     name: "Panji Rafi Musyafah",
     role: "Cloud Infrastructure Member",
-    prodi: "Teknik Informatika",
+    prodi: "Sistem Informasi",
     batch: "2025",
   },
 ];
