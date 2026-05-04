@@ -283,7 +283,7 @@ export const members: TypeMember[] = [
   },
   {
     name: "Nailah Salsabila Ramadhani Kusnadi",
-    role: "Cloud Infrastructure and Software Development Member",
+    role: "Software Development Member",
     prodi: "Teknik Informatika",
     batch: "2025",
   },
@@ -319,6 +319,12 @@ export const members: TypeMember[] = [
   },
   {
     name: "Ahmad Jouwdad Aufa Robbani",
+    role: "Software Development Member",
+    prodi: "Teknik Informatika",
+    batch: "2025",
+  },
+  {
+    name: "Sidqiana Azzahra",
     role: "Software Development Member",
     prodi: "Teknik Informatika",
     batch: "2025",

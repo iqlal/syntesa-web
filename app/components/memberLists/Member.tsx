@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Reveal from "~/components/Reveal";
 import ScrambleText from "~/components/ScrambleText";
 
@@ -13,59 +13,81 @@ interface MembersProps {
   members: readonly TypeMember[];
 }
 
+type TabKey = "all" | "software" | "cloud";
+const PAGE_SIZE = 10;
+
+const tabs = [
+  {
+    key: "all" as const,
+    label: "All Members",
+    description: "All divisions combined.",
+  },
+  {
+    key: "software" as const,
+    label: "Software Development",
+    description: "Product engineering, web systems, and applied research.",
+  },
+  {
+    key: "cloud" as const,
+    label: "Cloud Infrastructure",
+    description: "Systems, networking, and platform operations.",
+  },
+] as const;
+
 export default function Members({ members }: MembersProps) {
   const safeMembers = Array.isArray(members) ? members : [];
-  const [activeTab, setActiveTab] = useState<"all" | "software" | "cloud">("all");
+  const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 10;
 
-  const softwareMembers = safeMembers.filter((member) =>
-    member.role.toLowerCase().includes("software"),
-  );
+  const softwareMembers = useMemo(() => {
+    return safeMembers.filter(({ role }) => {
+      const words = role.toLowerCase().split(/\s+/);
+      return words.includes("software");
+    });
+  }, [safeMembers]);
 
-  const cloudMembers = safeMembers.filter((member) => {
-    const role = member.role.toLowerCase();
-    return role.includes("cloud") && !role.includes("software");
-  });
+  const cloudMembers = useMemo(() => {
+    return safeMembers.filter(({ role }) => {
+      const words = role.toLowerCase().split(/\s+/);
+      const hasCloud = words.includes("cloud");
+      const hasSoftware = words.includes("software");
+      return hasCloud && !hasSoftware;
+    });
+  }, [safeMembers]);
 
-  const tabs = [
-    {
-      key: "all" as const,
-      label: "All Members",
-      description: "All divisions combined.",
-    },
-    {
-      key: "software" as const,
-      label: "Software Development",
-      description: "Product engineering, web systems, and applied research.",
-    },
-    {
-      key: "cloud" as const,
-      label: "Cloud Infrastructure",
-      description: "Systems, networking, and platform operations.",
-    },
-  ];
-
-  const activeMembers =
-    activeTab === "all" ? safeMembers : activeTab === "software" ? softwareMembers : cloudMembers;
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredMembers = normalizedQuery
-    ? activeMembers.filter((member) =>
-        `${member.name} ${member.role} ${member.prodi} ${member.batch}`
-          .toLowerCase()
-          .includes(normalizedQuery),
-      )
-    : activeMembers;
-
-  const sortedMembers = filteredMembers.slice().sort((a, b) => {
-    const aIsLead = a.role.toLowerCase().includes("lead");
-    const bIsLead = b.role.toLowerCase().includes("lead");
-    if (aIsLead !== bIsLead) {
-      return aIsLead ? -1 : 1;
+  const activeMembers = useMemo(() => {
+    switch (activeTab) {
+      case "software":
+        return softwareMembers;
+      case "cloud":
+        return cloudMembers;
+      default:
+        return safeMembers;
     }
-    return a.name.localeCompare(b.name);
-  });
+  }, [activeTab, softwareMembers, cloudMembers, safeMembers]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const filteredMembers = useMemo(() => {
+    if (!normalizedQuery) return activeMembers;
+    return activeMembers.filter((member) => {
+      const haystack =
+        `${member.name} ${member.role} ${member.prodi} ${member.batch}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [activeMembers, normalizedQuery]);
+
+  const sortedMembers = useMemo(() => {
+    return [...filteredMembers].sort((a, b) => {
+      const aIsLead = /\blead\b/i.test(a.role);
+      const bIsLead = /\blead\b/i.test(b.role);
+      if (aIsLead !== bIsLead) {
+        return aIsLead ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredMembers]);
 
   const activeLabel = tabs.find((tab) => tab.key === activeTab)?.label ?? "Members";
   const activeDescription = tabs.find((tab) => tab.key === activeTab)?.description ?? "";
@@ -169,12 +191,13 @@ export default function Members({ members }: MembersProps) {
               <label className="w-full sm:w-72">
                 <span className="sr-only">Search members</span>
                 <input
+                  id="member-search"
                   type="search"
                   value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value);
+                  onChange={useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+                    setQuery(e.target.value);
                     setCurrentPage(1);
-                  }}
+                  }, [])}
                   placeholder="Search name, role, or batch"
                   className="w-full rounded-full border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-4 py-2 text-sm text-gray-700 dark:text-neutral-200 placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-gray-400 dark:focus:ring-neutral-600"
                 />
@@ -235,12 +258,9 @@ export default function Members({ members }: MembersProps) {
                       <p className="text-sm text-gray-600 dark:text-neutral-400">{member.prodi}</p>
                     </div>
                     <div className="sm:col-span-2 p-6 sm:p-8 flex items-center sm:items-start sm:flex-col gap-2">
-                      <time
-                        dateTime={member.batch}
-                        className="text-xs font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-500"
-                      >
+                      <span className="text-xs font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-500">
                         Batch {member.batch}
-                      </time>
+                      </span>
                       {isLead && (
                         <span className="inline-flex px-2.5 py-1 text-xs font-mono uppercase tracking-wider border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
                           Lead
