@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Reveal from "~/components/Reveal";
 import ScrambleText from "~/components/ScrambleText";
 
@@ -13,35 +13,98 @@ interface MembersProps {
   members: readonly TypeMember[];
 }
 
+type TabKey = "all" | "software" | "cloud";
+const PAGE_SIZE = 10;
+
+const tabs = [
+  {
+    key: "all" as const,
+    label: "All Members",
+    description: "All divisions combined.",
+  },
+  {
+    key: "software" as const,
+    label: "Software Development",
+    description: "Product engineering, web systems, and applied research.",
+  },
+  {
+    key: "cloud" as const,
+    label: "Cloud Infrastructure",
+    description: "Systems, networking, and platform operations.",
+  },
+] as const;
+
 export default function Members({ members }: MembersProps) {
   const safeMembers = Array.isArray(members) ? members : [];
-  const [selectedCategory, setSelectedCategory] = useState<"software" | "cloud" | null>(null);
-  const [selectedMember, setSelectedMember] = useState<TypeMember | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>("all");
+  const [query, setQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const softwareMembers = safeMembers.filter((member) =>
-    member.role.toLowerCase().includes("software"),
-  );
+  const softwareMembers = useMemo(() => {
+    return safeMembers.filter(({ role }) => {
+      const words = role.toLowerCase().split(/\s+/);
+      return words.includes("software");
+    });
+  }, [safeMembers]);
 
-  const cloudMembers = safeMembers.filter((member) => member.role.toLowerCase().includes("cloud"));
+  const cloudMembers = useMemo(() => {
+    return safeMembers.filter(({ role }) => {
+      const words = role.toLowerCase().split(/\s+/);
+      const hasCloud = words.includes("cloud");
+      const hasSoftware = words.includes("software");
+      return hasCloud && !hasSoftware;
+    });
+  }, [safeMembers]);
 
-  const handleCategoryClick = (category: "software" | "cloud") => {
-    setSelectedCategory(selectedCategory === category ? null : category);
-    setSelectedMember(null);
-  };
+  const activeMembers = useMemo(() => {
+    switch (activeTab) {
+      case "software":
+        return softwareMembers;
+      case "cloud":
+        return cloudMembers;
+      default:
+        return safeMembers;
+    }
+  }, [activeTab, softwareMembers, cloudMembers, safeMembers]);
 
-  const handleMemberClick = (member: TypeMember) => {
-    setSelectedMember(selectedMember === member ? null : member);
-  };
+  const normalizedQuery = query.trim().toLowerCase();
 
-  const getCategoryLightColor = (_category: "software" | "cloud") =>
-    "bg-gray-50 border-gray-300 dark:border-gray-300";
+  const filteredMembers = useMemo(() => {
+    if (!normalizedQuery) return activeMembers;
+    return activeMembers.filter((member) => {
+      const haystack =
+        `${member.name} ${member.role} ${member.prodi} ${member.batch}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [activeMembers, normalizedQuery]);
+
+  const sortedMembers = useMemo(() => {
+    return [...filteredMembers].sort((a, b) => {
+      const aIsLead = /\blead\b/i.test(a.role);
+      const bIsLead = /\blead\b/i.test(b.role);
+      if (aIsLead !== bIsLead) {
+        return aIsLead ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredMembers]);
+
+  const activeLabel = tabs.find((tab) => tab.key === activeTab)?.label ?? "Members";
+  const activeDescription = tabs.find((tab) => tab.key === activeTab)?.description ?? "";
+
+  const totalMembers = sortedMembers.length;
+  const totalPages = Math.max(Math.ceil(totalMembers / PAGE_SIZE), 1);
+  const boundedPage = Math.min(currentPage, totalPages);
+  const startIndex = (boundedPage - 1) * PAGE_SIZE;
+  const pagedMembers = sortedMembers.slice(startIndex, startIndex + PAGE_SIZE);
+  const statusLabel = query.trim().length > 0 ? "Filtered" : "All members";
 
   return (
     <section
       aria-labelledby="members-heading"
       className=" h-calc(100vh - 4rem) relative py-12 bg-white dark:bg-neutral-950 border-t border-gray-200 dark:border-neutral-800 overflow-hidden"
     >
-      <div className="max-w-480 mx-auto w-full border border-gray-200 dark:border-neutral-800">
+      <div className="max-w-480 mx-auto w-full sm:border-x border-gray-200 dark:border-neutral-800">
         <div className="grid grid-cols-1 lg:grid-cols-12 border-b border-gray-200 dark:border-neutral-800">
           <div className="lg:col-span-4 p-6 sm:p-12 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-neutral-800 bg-hatching relative">
             <Reveal>
@@ -73,171 +136,193 @@ export default function Members({ members }: MembersProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 sm:p-12 border-b border-gray-200 dark:border-neutral-800">
-          {(["software", "cloud"] as const).map((category) => {
-            const categoryMembers = category === "software" ? softwareMembers : cloudMembers;
-            const label = category === "software" ? "Software Development" : "Cloud Infrastructure";
-            const isSelected = selectedCategory === category;
+        <div className="border-b border-gray-200 dark:border-neutral-800">
+          <div className="grid grid-cols-1 lg:grid-cols-12">
+            <div className="lg:col-span-4 p-6 sm:p-8 lg:border-r border-gray-200 dark:border-neutral-800">
+              <p className="text-xs font-mono uppercase tracking-wider text-gray-500 dark:text-neutral-400">
+                Interest Groups
+              </p>
+              <div className="mt-4 inline-flex flex-wrap gap-2 rounded-full border border-gray-200 dark:border-neutral-800 p-1 bg-white dark:bg-neutral-950">
+                {tabs.map((tab) => {
+                  const isActive = activeTab === tab.key;
+                  const tabCount =
+                    tab.key === "all"
+                      ? safeMembers.length
+                      : tab.key === "software"
+                        ? softwareMembers.length
+                        : cloudMembers.length;
 
-            return (
-              <button
-                key={category}
-                type="button"
-                onClick={() => handleCategoryClick(category)}
-                className={`
-                  group relative overflow-hidden rounded-2xl border-2 transition-all duration-500 cursor-pointer
-                  bg-transparent text-inherit p-0 border-none
-                  ${
-                    isSelected
-                      ? "border-gray-500 shadow-2xl scale-[1.02]"
-                      : "border-gray-100 dark:border-neutral-800 hover:border-gray-400 dark:hover:border-gray-300"
-                  }
-                  ${getCategoryLightColor(category)}
-                `}
-                style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
-              >
-                <div className="p-8">
-                  <div
-                    className="absolute top-0 right-0 w-32 h-32 bg-linear-to-br from-gray-300 to-gray-600 opacity-10 rounded-bl-full transition-transform duration-500 group-hover:scale-150"
-                    style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
-                  />
-
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h3 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">
-                        {label}
-                      </h3>
-                      <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-                        {categoryMembers.length} Members
-                      </p>
-                    </div>
-                    <div
-                      className="w-12 h-12 rounded-full bg-linear-to-br from-gray-300 to-gray-600 flex items-center justify-center text-white text-2xl transform transition-transform duration-500 group-hover:rotate-180"
-                      style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
-                    ></div>
-                  </div>
-
-                  <div className="space-y-2 mb-6">
-                    {categoryMembers.slice(0, 3).map((member) => (
-                      <div
-                        key={member.name}
-                        className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-300"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                        {member.name}
-                      </div>
-                    ))}
-                    {categoryMembers.length > 3 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        +{categoryMembers.length - 3} more members
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-200">
-                    <span>{isSelected ? "Click to collapse" : "Click to expand"}</span>
-                    <svg
-                      className={`w-4 h-4 transition-transform duration-300 ${isSelected ? "rotate-180" : ""}`}
-                      style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      aria-label="Toggle members"
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(tab.key);
+                        setCurrentPage(1);
+                      }}
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-mono uppercase tracking-wider transition-colors ${
+                        isActive
+                          ? "bg-gray-900 text-white dark:bg-apple-blue-500"
+                          : "text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-neutral-100"
+                      }`}
                     >
-                      <title>Toggle members visibility</title>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {selectedCategory && (
-          <div
-            key={selectedCategory}
-            className="p-6 sm:p-12 border-b border-gray-200 dark:border-neutral-800 animate-in fade-in slide-in-from-top-2 duration-500"
-          >
-            <h3 className="text-2xl font-bold mb-6 text-gray-900 dark:text-neutral-100">
-              {selectedCategory === "software" ? "Software Development" : "Cloud Infrastructure"}{" "}
-              Members
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(selectedCategory === "software" ? softwareMembers : cloudMembers).map((member) => (
-                <button
-                  type="button"
-                  key={member.name}
-                  onClick={() => handleMemberClick(member)}
-                  className={`
-                    group relative p-6 rounded-xl border-2 transition-all duration-300 cursor-pointer
-                    bg-transparent text-inherit border-none
-                    ${
-                      selectedMember === member
-                        ? "border-gray-500 shadow-xl scale-[1.02] bg-gray-50 dark:bg-gray-950/20"
-                        : "border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700 bg-white dark:bg-neutral-900"
-                    }
-                  `}
-                  style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
-                >
-                  <div className="flex items-start gap-4 mb-4">
-                    <div
-                      className="w-12 h-12 rounded-full bg-linear-to-br from-gray-300 to-gray-600 flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition-transform duration-300"
-                      style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
-                    >
-                      {member.name
-                        .split(" ")
-                        .map((n: string) => n[0])
-                        .join("")
-                        .toUpperCase()
-                        .slice(0, 2)}
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900 dark:text-neutral-100">
-                        {member.name}
-                      </h4>
-                      <p className="text-sm text-gray-600 dark:text-neutral-400">{member.role}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-400"></span>
-                      <span className="text-gray-600 dark:text-neutral-400">{member.prodi}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-400"></span>
-                      <span className="text-gray-600 dark:text-neutral-400">
-                        Batch {member.batch}
+                      <span>
+                        {tab.key === "all" ? "All" : tab.key === "software" ? "Software" : "Cloud"}
                       </span>
-                    </div>
-                  </div>
-
-                  {selectedMember === member && (
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-neutral-800 animate-in fade-in slide-in-from-top-1 duration-300">
-                      <p className="text-sm text-gray-500 dark:text-neutral-400">
-                        Member since {member.batch}
-                      </p>
-                      <div className="mt-2 inline-block px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                        Active Member
-                      </div>
-                    </div>
-                  )}
-                </button>
-              ))}
+                      <span
+                        className={`text-[10px] font-mono ${
+                          isActive ? "text-white/80" : "text-gray-400 dark:text-neutral-500"
+                        }`}
+                      >
+                        {tabCount}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="lg:col-span-8 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-neutral-300">{activeLabel}</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-500 mt-1">
+                  {activeDescription}
+                </p>
+              </div>
+              <label className="w-full sm:w-72">
+                <span className="sr-only">Search members</span>
+                <input
+                  id="member-search"
+                  type="search"
+                  value={query}
+                  onChange={useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+                    setQuery(e.target.value);
+                    setCurrentPage(1);
+                  }, [])}
+                  placeholder="Search name, role, or batch"
+                  className="w-full rounded-full border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-4 py-2 text-sm text-gray-700 dark:text-neutral-200 placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-gray-400 dark:focus:ring-neutral-600"
+                />
+              </label>
             </div>
           </div>
-        )}
+        </div>
+
+        <div className="border-b border-gray-200 dark:border-neutral-800">
+          <div className="grid grid-cols-1 sm:grid-cols-12 border-b border-gray-200 dark:border-neutral-800">
+            <div className="sm:col-span-4 p-6 sm:p-8 sm:border-r border-gray-200 dark:border-neutral-800">
+              <p className="text-xs font-mono uppercase tracking-wider text-gray-500 dark:text-neutral-400">
+                Members
+              </p>
+              <h3 className="text-2xl font-medium text-gray-900 dark:text-neutral-100 mt-2">
+                {activeLabel}
+              </h3>
+            </div>
+            <div className="sm:col-span-8 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm text-gray-500 dark:text-neutral-400">
+                Showing {pagedMembers.length} of {totalMembers} members.
+              </p>
+              <span className="text-xs font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-500">
+                {statusLabel}
+              </span>
+            </div>
+          </div>
+
+          <div className="divide-y divide-gray-200 dark:divide-neutral-800">
+            {totalMembers === 0 ? (
+              <div className="p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+                No members found. Try a different search term.
+              </div>
+            ) : (
+              pagedMembers.map((member, index) => {
+                const isLead = member.role.toLowerCase().includes("lead");
+                const memberIndex = startIndex + index + 1;
+
+                return (
+                  <article
+                    key={member.name}
+                    className="grid grid-cols-1 sm:grid-cols-12 transition-[background-color] duration-300 hover:bg-gray-50 dark:hover:bg-neutral-900"
+                  >
+                    <div className="sm:col-span-1 p-6 sm:p-8 sm:border-r border-gray-200 dark:border-neutral-800">
+                      <span className="text-xs font-mono text-gray-400 dark:text-neutral-600">
+                        {memberIndex.toString().padStart(2, "0")}
+                      </span>
+                    </div>
+                    <div className="sm:col-span-5 p-6 sm:p-8 sm:border-r border-gray-200 dark:border-neutral-800">
+                      <h4 className="font-medium text-gray-900 dark:text-neutral-100">
+                        {member.name}
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-neutral-400 mt-1">
+                        {member.role}
+                      </p>
+                    </div>
+                    <div className="sm:col-span-4 p-6 sm:p-8 sm:border-r border-gray-200 dark:border-neutral-800">
+                      <p className="text-sm text-gray-600 dark:text-neutral-400">{member.prodi}</p>
+                    </div>
+                    <div className="sm:col-span-2 p-6 sm:p-8 flex items-center sm:items-start sm:flex-col gap-2">
+                      <span className="text-xs font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-500">
+                        Batch {member.batch}
+                      </span>
+                      {isLead && (
+                        <span className="inline-flex px-2.5 py-1 text-xs font-mono uppercase tracking-wider border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
+                          Lead
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="p-6 sm:p-8 border-t border-gray-200 dark:border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={boundedPage === 1}
+                className="px-4 py-2 text-xs font-mono uppercase tracking-wider border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-400 disabled:opacity-40 disabled:cursor-not-allowed hover:text-gray-900 dark:hover:text-neutral-100 transition-colors"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-2">
+                {Array.from({ length: totalPages }, (_, index) => {
+                  const page = index + 1;
+                  const isActive = page === boundedPage;
+
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`min-w-9 px-3 py-1.5 text-xs font-mono uppercase tracking-wider border transition-colors ${
+                        isActive
+                          ? "bg-gray-900 text-white border-gray-900 dark:bg-apple-blue-500 dark:border-apple-blue-500"
+                          : "border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-neutral-100"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={boundedPage === totalPages}
+                className="px-4 py-2 text-xs font-mono uppercase tracking-wider border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-400 disabled:opacity-40 disabled:cursor-not-allowed hover:text-gray-900 dark:hover:text-neutral-100 transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="p-6 sm:p-12 border-t border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900 bg-grid-lines overflow-hidden">
           <p className="text-sm text-gray-500 dark:text-neutral-400 text-center">
-            Total {safeMembers.length} active members across all divisions
+            {normalizedQuery.length > 0
+              ? `Filtered ${totalMembers} members in ${activeLabel}`
+              : activeTab === "all"
+                ? `Total ${safeMembers.length} active members across all divisions`
+                : `Total ${activeMembers.length} active members in ${activeLabel}`}
           </p>
         </div>
       </div>

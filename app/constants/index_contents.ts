@@ -272,7 +272,7 @@ export const members: TypeMember[] = [
   {
     name: "Muhromin",
     role: "Software Development Member",
-    prodi: "Teknik Informatika",
+    prodi: "Sistem Informasi",
     batch: "2025",
   },
   {
@@ -283,7 +283,7 @@ export const members: TypeMember[] = [
   },
   {
     name: "Nailah Salsabila Ramadhani Kusnadi",
-    role: "Cloud Infrastructure and Software Development Member",
+    role: "Software Development Member",
     prodi: "Teknik Informatika",
     batch: "2025",
   },
@@ -296,13 +296,13 @@ export const members: TypeMember[] = [
   {
     name: "Krishna Surya Dewata",
     role: "Cloud Infrastructure Member",
-    prodi: "Teknik Informatika",
+    prodi: "Sistem Informasi",
     batch: "2025",
   },
   {
     name: "Amelia Prasa Agustin",
     role: "Cloud Infrastructure Member",
-    prodi: "Teknik Informatika",
+    prodi: "Sistem Informasi",
     batch: "2025",
   },
   {
@@ -324,6 +324,12 @@ export const members: TypeMember[] = [
     batch: "2025",
   },
   {
+    name: "Sidqiana Azzahra",
+    role: "Software Development Member",
+    prodi: "Teknik Informatika",
+    batch: "2025",
+  },
+  {
     name: "Debora Angelika Purba",
     role: "Cloud Infrastructure Member",
     prodi: "Teknik Informatika",
@@ -332,7 +338,7 @@ export const members: TypeMember[] = [
   {
     name: "Panji Rafi Musyafah",
     role: "Cloud Infrastructure Member",
-    prodi: "Teknik Informatika",
+    prodi: "Sistem Informasi",
     batch: "2025",
   },
 ];
